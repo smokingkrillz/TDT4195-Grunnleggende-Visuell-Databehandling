@@ -20,6 +20,7 @@ mod renderer;
 mod input;
 mod mesh;
 mod scene_graph;
+mod toolbox;
 use glutin::event::{
     DeviceEvent,
     ElementState::{Pressed, Released},

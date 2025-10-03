@@ -4,6 +4,7 @@ use crate::scene::Scene;
 use crate::shader;
 use crate::mesh::{Terrain, Mesh, Helicopter};
 use crate::scene_graph::{SceneNode, Node};
+use crate::toolbox;
 
 pub struct Renderer {
     pub root_node: Node,
@@ -133,7 +134,9 @@ impl Renderer {
     unsafe fn update_animations(&self, elapsed_time: f32) {
         // Animation speeds 
         let rotor_speed = 8.0;
-  
+        
+        // Get helicopter path animation using toolbox function
+        let heading = toolbox::simple_heading_animation(elapsed_time);
         
         // Calculate current rotation based on elapsed time
         let main_rotor_rotation = elapsed_time * rotor_speed;
@@ -145,6 +148,15 @@ impl Renderer {
             // Get helicopter root node (should be second child after terrain)
             let helicopter_root_ptr = root.children[1];
             let helicopter_root = &mut *helicopter_root_ptr;
+            
+            // Update helicopter position from heading animation
+            helicopter_root.position.x = heading.x;
+            helicopter_root.position.z = heading.z;
+            
+            // Update helicopter rotations (using Z-Y-X order for better visual results)
+            helicopter_root.rotation.z = heading.roll;  // Roll around Z-axis
+            helicopter_root.rotation.y = heading.yaw;   // Yaw around Y-axis  
+            helicopter_root.rotation.x = heading.pitch; // Pitch around X-axis
             
             if helicopter_root.children.len() >= 4 {
                 // Main rotor should be third child 
