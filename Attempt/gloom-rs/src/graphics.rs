@@ -25,13 +25,13 @@ pub fn offset<T>(n: u32) -> *const c_void {
 }
 
 // TASK 1 a)
-pub unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>) -> u32 {
+pub unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>, normals: &Vec<f32>) -> u32 {
     // defining variables
     let mut vao = 0;
     let mut vbo = 0;
     let mut ibo = 0;
     let mut cbo = 0;
-    
+    let mut nbo = 0;
     // vertex array objects
     gl::GenVertexArrays(1, &mut vao);
     gl::BindVertexArray(vao);
@@ -76,6 +76,26 @@ pub unsafe fn create_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f
     );
     gl::EnableVertexAttribArray(1);
 
+    // normal buffer
+    gl::GenBuffers(1, &mut nbo);
+    gl::BindBuffer(gl::ARRAY_BUFFER, nbo);
+    gl::BufferData(
+        gl::ARRAY_BUFFER,
+        byte_size_of_array(normals),
+        pointer_to_array(normals),
+        gl::STATIC_DRAW,
+    );
+    gl::VertexAttribPointer(
+        2,
+        3,
+        gl::FLOAT,
+        gl::FALSE,
+        0,
+        offset::<f32>(0),
+    );
+    gl::EnableVertexAttribArray(2);
+
+    
     //index buffer
     gl::GenBuffers(1, &mut ibo);
     gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ibo);

@@ -23,7 +23,7 @@ impl Camera {
             aspect_ratio,
             fovy: 1.2, 
             near: 1.0,
-            far: 100.0,
+            far: 1000.0,
             
           
             x: 0.0,

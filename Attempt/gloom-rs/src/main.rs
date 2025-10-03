@@ -18,7 +18,7 @@ mod scene;
 mod camera;
 mod renderer;
 mod input;
-
+mod mesh;
 use glutin::event::{
     DeviceEvent,
     ElementState::{Pressed, Released},

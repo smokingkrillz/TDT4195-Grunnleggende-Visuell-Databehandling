@@ -2,17 +2,21 @@ use crate::camera::Camera;
 use crate::graphics;
 use crate::scene::Scene;
 use crate::shader;
+use crate::mesh::{Terrain, Mesh};
 
 pub struct Renderer {
     pub vao: u32,
+    pub terrain: Mesh,
     pub shader_program: shader::Shader,
     pub alpha_location: i32,
     pub transform_matrix_location: i32,
 }
 // Renderer 
 impl Renderer {
-    pub unsafe fn new(scene: &Scene) -> Self {
-        let vao = graphics::create_vao(&scene.vertices, &scene.indices, &scene.colors);
+    pub unsafe fn new(_scene: &Scene) -> Self {
+        let terrain = Terrain::load("resources/lunarsurface.obj");
+
+        let vao = graphics::create_vao(&terrain.vertices, &terrain.indices, &terrain.colors, &terrain.normals);
 
         let shader_program = shader::ShaderBuilder::new()
             .attach_file("shaders/simple.vert")
@@ -42,7 +46,7 @@ impl Renderer {
 
         Renderer {
             vao,
-
+            terrain,
             shader_program,
             alpha_location,
             transform_matrix_location,
@@ -77,7 +81,8 @@ impl Renderer {
         // Draw all triangles at once
         gl::DrawElements(
             gl::TRIANGLES,
-            9, // 3 triangles * 3 vertices each
+            //terrain index count
+            self.terrain.index_count,
             gl::UNSIGNED_INT,
             std::ptr::null(),
         );
