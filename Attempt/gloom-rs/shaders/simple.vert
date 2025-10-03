@@ -6,12 +6,15 @@ layout (location = 2) in vec3 aNormal;
 out vec4 vertexColor; 
 out vec3 fragNormal;  
 
-// Transformation matrix passed from CPU
-uniform mat4 uTransformMatrix;
+uniform mat4 uMVPMatrix;    // Model-View-Projection matrix for vertex positions
+uniform mat4 uModelMatrix;  // Model matrix only for normal transformations
 
 void main()
 {
-    gl_Position = uTransformMatrix * vec4(aPos, 1.0);
+    gl_Position = uMVPMatrix * vec4(aPos, 1.0);
     vertexColor = aColor;
-    fragNormal = aNormal;
+    
+    
+    mat3 normalMatrix = mat3(uModelMatrix);  // Extract 3x3 rotation/scale matrix
+    fragNormal = normalize(normalMatrix * aNormal);
 }

@@ -10,7 +10,8 @@ pub struct Renderer {
     pub root_node: Node,
     pub shader_program: shader::Shader,
     pub alpha_location: i32,
-    pub transform_matrix_location: i32,
+    pub mvp_matrix_location: i32,
+    pub model_matrix_location: i32,
 }
 // Renderer 
 impl Renderer {
@@ -90,12 +91,21 @@ impl Renderer {
             )
         };
 
-        let transform_matrix_location = {
+        let mvp_matrix_location = {
             let mut current_program: i32 = 0;
             gl::GetIntegerv(gl::CURRENT_PROGRAM, &mut current_program);
             gl::GetUniformLocation(
                 current_program as u32,
-                b"uTransformMatrix\0".as_ptr() as *const _,
+                b"uMVPMatrix\0".as_ptr() as *const _,
+            )
+        };
+
+        let model_matrix_location = {
+            let mut current_program: i32 = 0;
+            gl::GetIntegerv(gl::CURRENT_PROGRAM, &mut current_program);
+            gl::GetUniformLocation(
+                current_program as u32,
+                b"uModelMatrix\0".as_ptr() as *const _,
             )
         };
 
@@ -103,7 +113,8 @@ impl Renderer {
             root_node,
             shader_program,
             alpha_location,
-            transform_matrix_location,
+            mvp_matrix_location,
+            model_matrix_location,
         }
     }
 
@@ -204,12 +215,19 @@ impl Renderer {
             //multiplication order is ViewProjection * Model
             let mvp_matrix = view_projection_matrix * current_model_matrix;
             
-            // Apply the final MVP matrix to the vertex shader
+            // Pass both MVP matrix and Model matrix to the shader as separate uniforms
             gl::UniformMatrix4fv(
-                self.transform_matrix_location,
+                self.mvp_matrix_location,
                 1,
                 gl::FALSE,
                 mvp_matrix.as_ptr(),
+            );
+            
+            gl::UniformMatrix4fv(
+                self.model_matrix_location,
+                1,
+                gl::FALSE,
+                current_model_matrix.as_ptr(),
             );
 
             // Draw the geometry
