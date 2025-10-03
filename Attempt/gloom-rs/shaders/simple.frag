@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 in vec4 vertexColor;
 in vec3 fragNormal;   // Normal from vertex shader
 out vec4 FragColor;

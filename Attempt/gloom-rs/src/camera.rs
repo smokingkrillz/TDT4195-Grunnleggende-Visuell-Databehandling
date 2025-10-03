@@ -27,10 +27,10 @@ impl Camera {
             
           
             x: 0.0,
-            y: 0.0,
-            z: 0.0,
+            y: 200.0,
+            z: -5.0,
             yaw: 0.0,
-            pitch: 0.0,
+            pitch: -1.57,
             roll: 0.0,
         }
     }
@@ -77,15 +77,18 @@ impl Camera {
     }
 
 
-    // Get the combined view-projection matrix
     pub fn get_view_projection_matrix(&self) -> glm::Mat4 {
         self.get_perspective_matrix() * self.get_view_matrix()
     }
 
-    // For rendering the scene
     pub fn get_scene_transform(&self) -> glm::Mat4 {
     
         let model_matrix = glm::translate(&glm::Mat4::identity(), &glm::vec3(0.0, 0.0, -5.0));
+        self.get_view_projection_matrix() * model_matrix
+    }
+
+    pub fn get_helicopter_transform(&self) -> glm::Mat4 {
+        let model_matrix = glm::translate(&glm::Mat4::identity(), &glm::vec3(0.0, 20.0, -5.0));
         self.get_view_projection_matrix() * model_matrix
     }
 }

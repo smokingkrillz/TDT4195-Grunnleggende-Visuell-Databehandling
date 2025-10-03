@@ -19,6 +19,7 @@ mod camera;
 mod renderer;
 mod input;
 mod mesh;
+mod scene_graph;
 use glutin::event::{
     DeviceEvent,
     ElementState::{Pressed, Released},
@@ -32,6 +33,7 @@ use camera::Camera;
 use scene::Scene;
 use renderer::Renderer;
 use input::InputHandler;
+use scene_graph::SceneNode;
 
 // initial window size
 const INITIAL_SCREEN_W: u32 = 800;
