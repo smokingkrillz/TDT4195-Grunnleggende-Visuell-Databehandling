@@ -43,11 +43,18 @@ impl Renderer {
         let mut helicopter_root_node = SceneNode::new();
         helicopter_root_node.position = glm::vec3(0.0, 20.0, 0.0);
 
-        // 4) Create individual helicopter part nodes
+        // 4) Create individual helicopter part nodes with proper reference points
         let mut helicopter_body_node = SceneNode::from_vao(helicopter_body_vao, helicopter.body.index_count);
+        helicopter_body_node.reference_point = glm::vec3(0.0, 0.0, 0.0); // Body rotates around its center
+        
         let mut helicopter_door_node = SceneNode::from_vao(helicopter_door_vao, helicopter.door.index_count);
+        helicopter_door_node.reference_point = glm::vec3(0.0, 0.0, 0.0); // Door rotates around its hinge
+        
         let mut helicopter_main_rotor_node = SceneNode::from_vao(helicopter_main_rotor_vao, helicopter.main_rotor.index_count);
+        helicopter_main_rotor_node.reference_point = glm::vec3(0.0, 0.0, 0.0); // Main rotor rotates around its center
+        
         let mut helicopter_tail_rotor_node = SceneNode::from_vao(helicopter_tail_rotor_vao, helicopter.tail_rotor.index_count);
+        helicopter_tail_rotor_node.reference_point = glm::vec3(0.35, 2.3, 10.4); // Tail rotor reference point as specified
 
         // 5) Build the hierarchy: attach helicopter parts to helicopter root
         helicopter_root_node.add_child(&helicopter_body_node);
@@ -112,19 +119,26 @@ impl Renderer {
         let view_projection_matrix = camera.get_view_projection_matrix();
         
         // Traverse and draw the scene graph starting from root
-        self.draw_scene_node(&*self.root_node, &view_projection_matrix);
+        self.draw_scene(&*self.root_node, &view_projection_matrix);
     }
 
     unsafe fn draw_scene(&self, node: &SceneNode, parent_transform: &glm::Mat4) {
         // Calculate this node's transformation matrix
         let translation = glm::translation(&node.position);
+        let scale = glm::scaling(&node.scale);
+        
+        // Reference point transformations for rotation
+        let to_reference = glm::translation(&node.reference_point);
+        let from_reference = glm::translation(&(-node.reference_point));
+        
+        // Rotation matrices
         let rotation_x = glm::rotation(node.rotation.x, &glm::vec3(1.0, 0.0, 0.0));
         let rotation_y = glm::rotation(node.rotation.y, &glm::vec3(0.0, 1.0, 0.0));
         let rotation_z = glm::rotation(node.rotation.z, &glm::vec3(0.0, 0.0, 1.0));
-        let scale = glm::scaling(&node.scale);
-        
-        // Combine transformations: parent * translation * rotation * scale
-        let node_transform = translation * rotation_y * rotation_x * rotation_z * scale;
+        let rotation = rotation_z * rotation_y * rotation_x;
+     
+        // Combine transformations: Translation * (Translate_to_ref * Rotate * Translate_from_ref) * Scale
+        let node_transform = translation * to_reference * rotation * from_reference * scale;
         let final_transform = parent_transform * node_transform;
 
         // If this node has geometry to draw (index_count > 0)
