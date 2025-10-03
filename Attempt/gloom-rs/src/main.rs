@@ -101,7 +101,7 @@ fn main() {
         // Initialize scene, camera, renderer, and input handler
         let scene = Scene::new();
         let mut camera = Camera::new(window_aspect_ratio);
-        let renderer = unsafe { Renderer::new(&scene) };
+        let mut renderer = unsafe { Renderer::new(&scene) };
         let mut input_handler = InputHandler::new();
         
         // The main rendering loop
@@ -144,7 +144,8 @@ fn main() {
 
             // Render the scene with animation time
             unsafe {
-                renderer.render(&camera, elapsed);
+                renderer.update_animations(elapsed);
+                renderer.render(&camera);
             }
 
             // Display the new color buffer on the display

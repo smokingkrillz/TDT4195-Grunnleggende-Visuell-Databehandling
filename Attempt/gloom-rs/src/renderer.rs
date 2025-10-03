@@ -1,78 +1,73 @@
 use crate::camera::Camera;
 use crate::graphics;
+use crate::mesh::{Helicopter, Terrain};
 use crate::scene::Scene;
+use crate::scene_graph::{Node, SceneNode};
 use crate::shader;
-use crate::mesh::{Terrain, Mesh, Helicopter};
-use crate::scene_graph::{SceneNode, Node};
 use crate::toolbox;
+
+// this is needed for dereferencing raw pointers in the scene graph
+
+extern crate nalgebra_glm as glm;
+
+#[inline]
+fn node_ref(n: &Node) -> &SceneNode {
+    unsafe { &**n }
+}
+#[inline]
+fn node_mut(n: &mut Node) -> &mut SceneNode {
+    unsafe { &mut ***n }
+}
 
 pub struct Renderer {
     pub root_node: Node,
+    pub helicopters: Vec<Node>, 
+    // Shader + uniforms
     pub shader_program: shader::Shader,
     pub alpha_location: i32,
     pub mvp_matrix_location: i32,
     pub model_matrix_location: i32,
 }
-// Renderer 
+
 impl Renderer {
-
-
     pub unsafe fn new(_scene: &Scene) -> Self {
-        // Load terrain
+    
+        let helicopter_model = Helicopter::load("resources/helicopter.obj");
         let terrain = Terrain::load("resources/lunarsurface.obj");
-        let terrain_vao = graphics::create_vao(&terrain.vertices, &terrain.indices, &terrain.colors, &terrain.normals);
 
-        // Load helicopter
-        let helicopter = Helicopter::load("resources/helicopter.obj");
-        
+        // creating terrain vao
+        let terrain_vao = graphics::create_vao(
+            &terrain.vertices,
+            &terrain.indices,
+            &terrain.colors,
+            &terrain.normals,
+        );
 
-        
-        // Create separate VAOs for each helicopter part
-        let helicopter_body_vao = graphics::create_vao(&helicopter.body.vertices, &helicopter.body.indices, &helicopter.body.colors, &helicopter.body.normals);
-        let helicopter_door_vao = graphics::create_vao(&helicopter.door.vertices, &helicopter.door.indices, &helicopter.door.colors, &helicopter.door.normals);
-        let helicopter_main_rotor_vao = graphics::create_vao(&helicopter.main_rotor.vertices, &helicopter.main_rotor.indices, &helicopter.main_rotor.colors, &helicopter.main_rotor.normals);
-        let helicopter_tail_rotor_vao = graphics::create_vao(&helicopter.tail_rotor.vertices, &helicopter.tail_rotor.indices, &helicopter.tail_rotor.colors, &helicopter.tail_rotor.normals);
-
-        
-
-        let mut root_node = SceneNode::new();
-
-        // 2) Create terrain node
-        let mut terrain_node = SceneNode::from_vao(terrain_vao, terrain.index_count);
-        terrain_node.position = glm::vec3(0.0, 0.0, -5.0);
-
-        // 3) Create helicopter root node (positioned above terrain)
-        let mut helicopter_root_node = SceneNode::new();
-        helicopter_root_node.position = glm::vec3(0.0, 20.0, 0.0);
-
-        // 4) Create individual helicopter part nodes with proper reference points
-        let mut helicopter_body_node = SceneNode::from_vao(helicopter_body_vao, helicopter.body.index_count);
-        
-        let mut helicopter_door_node = SceneNode::from_vao(helicopter_door_vao, helicopter.door.index_count);
-      
-        
-        let mut helicopter_main_rotor_node = SceneNode::from_vao(helicopter_main_rotor_vao, helicopter.main_rotor.index_count);
-        
-        let mut helicopter_tail_rotor_node = SceneNode::from_vao(helicopter_tail_rotor_vao, helicopter.tail_rotor.index_count);
-        helicopter_tail_rotor_node.reference_point = glm::vec3(0.35, 2.3, 10.4); // Tail rotor reference point given
-
-
-        //testing 
-        // helicopter_body_node.rotation.y = std::f32::consts::PI / 6.0; // 30 degrees around Y-axis
-        // helicopter_body_node.position.x = 2.0; 
-        // 5) Build the hierarchy: attach helicopter parts to helicopter root
-        helicopter_root_node.add_child(&helicopter_body_node);
-        helicopter_root_node.add_child(&helicopter_door_node);
-        helicopter_root_node.add_child(&helicopter_main_rotor_node);
-        helicopter_root_node.add_child(&helicopter_tail_rotor_node);
-
-        // 6) Attach terrain and helicopter to scene root
-        root_node.add_child(&terrain_node);
-        root_node.add_child(&helicopter_root_node);
-
-        // Print the scene graph for debugging
-        println!("=== SCENE GRAPH STRUCTURE ===");
-        root_node.print();
+        // creating helicopter vaos only once
+        let body_vao = graphics::create_vao(
+            &helicopter_model.body.vertices,
+            &helicopter_model.body.indices,
+            &helicopter_model.body.colors,
+            &helicopter_model.body.normals,
+        );
+        let door_vao = graphics::create_vao(
+            &helicopter_model.door.vertices,
+            &helicopter_model.door.indices,
+            &helicopter_model.door.colors,
+            &helicopter_model.door.normals,
+        );
+        let main_vao = graphics::create_vao(
+            &helicopter_model.main_rotor.vertices,
+            &helicopter_model.main_rotor.indices,
+            &helicopter_model.main_rotor.colors,
+            &helicopter_model.main_rotor.normals,
+        );
+        let tail_vao = graphics::create_vao(
+            &helicopter_model.tail_rotor.vertices,
+            &helicopter_model.tail_rotor.indices,
+            &helicopter_model.tail_rotor.colors,
+            &helicopter_model.tail_rotor.normals,
+        );
 
         let shader_program = shader::ShaderBuilder::new()
             .attach_file("shaders/simple.vert")
@@ -81,14 +76,11 @@ impl Renderer {
 
         shader_program.activate();
 
-        // Get uniform locations
+        
         let alpha_location = {
             let mut current_program: i32 = 0;
             gl::GetIntegerv(gl::CURRENT_PROGRAM, &mut current_program);
-            gl::GetUniformLocation(
-                current_program as u32,
-                b"uAlpha\0".as_ptr() as *const _,
-            )
+            gl::GetUniformLocation(current_program as u32, b"uAlpha\0".as_ptr() as *const _)
         };
 
         let mvp_matrix_location = {
@@ -109,128 +101,147 @@ impl Renderer {
             )
         };
 
+      
+        let mut terrain_node = SceneNode::from_vao(terrain_vao, terrain.index_count);
+
+        // Create 5 helicopters that reference the shared VAOs
+        let mut helicopters: Vec<Node> = Vec::new();
+        for i in 0..5 {
+            
+            let mut body_node = SceneNode::from_vao(body_vao, helicopter_model.body.index_count);
+            let mut door_node = SceneNode::from_vao(door_vao, helicopter_model.door.index_count);
+            let mut main_node = SceneNode::from_vao(main_vao, helicopter_model.main_rotor.index_count);
+            let mut tail_node = SceneNode::from_vao(tail_vao, helicopter_model.tail_rotor.index_count);
+
+
+            // Tail: given by assignment
+            node_mut(&mut tail_node).reference_point = glm::vec3(0.35, 2.3, 10.4);
+            
+            node_mut(&mut door_node).reference_point = glm::vec3(-1.0, 0.0, 0.0);
+      
+
+            // Helicopter root (group node, not drawable)
+            let mut heli_root = SceneNode::new();
+
+            // Hook up parts under the helicopter root
+            node_mut(&mut heli_root).add_child(node_ref(&body_node));
+            node_mut(&mut heli_root).add_child(node_ref(&door_node));
+            node_mut(&mut heli_root).add_child(node_ref(&main_node));
+            node_mut(&mut heli_root).add_child(node_ref(&tail_node));
+
+            // Spread them out a bit initially to avoid overlap before animation kicks in
+            node_mut(&mut heli_root).position = glm::vec3(i as f32 * 50.0, 20.0, 0.0);
+
+            
+            helicopters.push(heli_root);
+        }
+
+        // add helicopters under terrain
+        for heli_root in &helicopters {
+            node_mut(&mut terrain_node).add_child(node_ref(heli_root));
+        }
+
+        // Create root and add terrain
+        let mut root_node = SceneNode::new();
+        node_mut(&mut root_node).add_child(node_ref(&terrain_node));
+
+
+
         Renderer {
             root_node,
+            helicopters,
             shader_program,
             alpha_location,
             mvp_matrix_location,
-            model_matrix_location,
+            model_matrix_location
         }
     }
 
-    pub unsafe fn render(&self, camera: &Camera, elapsed_time: f32) {
-        // Clear the color and depth buffers
-        gl::ClearColor(0.035, 0.046, 0.078, 1.0); 
+    pub unsafe fn render(&self, camera: &Camera) {
+        // Clear
+        gl::ClearColor(0.035, 0.046, 0.078, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-        // Activate shader program before drawing
+        // Shader and global state
         self.shader_program.activate();
-        gl::Disable(gl::CULL_FACE);
+        gl::Enable(gl::CULL_FACE);
         gl::DepthMask(gl::TRUE);
         gl::Uniform1f(self.alpha_location, 0.9);
 
-        // Update rotor animations based on elapsed time
-        self.update_animations(elapsed_time);
+        // VP and identity
+        let vp = camera.get_view_projection_matrix();
+        let identity: glm::Mat4 = glm::identity();
 
-        // Get the View-Projection matrix from camera
-        let view_projection_matrix = camera.get_view_projection_matrix();
-        
-        // Start with identity matrix for model transformations
-        let identity_model = glm::Mat4::identity();
-        
-        // Traverse and draw the scene graph starting from root
-        self.draw_scene(&*self.root_node, &view_projection_matrix, &identity_model);
+        // Traverse and draw
+        Self::draw_scene(
+            node_ref(&self.root_node),
+            &vp,
+            &identity,
+            self.mvp_matrix_location,
+            self.model_matrix_location,
+        );
     }
 
-    unsafe fn update_animations(&self, elapsed_time: f32) {
-        // Animation speeds 
-        let rotor_speed = 8.0;
-        
-        // Get helicopter path animation using toolbox function
-        let heading = toolbox::simple_heading_animation(elapsed_time);
-        
-        // Calculate current rotation based on elapsed time
-        let main_rotor_rotation = elapsed_time * rotor_speed;
-        let tail_rotor_rotation = elapsed_time * rotor_speed;
 
-        // Access the root node and navigate to helicopter parts using unsafe pointers
-        let root = &*self.root_node;
-        if root.children.len() >= 2 {
-            // Get helicopter root node (should be second child after terrain)
-            let helicopter_root_ptr = root.children[1];
-            let helicopter_root = &mut *helicopter_root_ptr;
-            
-            // Update helicopter position from heading animation
-            helicopter_root.position.x = heading.x;
-            helicopter_root.position.z = heading.z;
-            
-            // Update helicopter rotations (using Z-Y-X order for better visual results)
-            helicopter_root.rotation.z = heading.roll;  // Roll around Z-axis
-            helicopter_root.rotation.y = heading.yaw;   // Yaw around Y-axis  
-            helicopter_root.rotation.x = heading.pitch; // Pitch around X-axis
-            
-            if helicopter_root.children.len() >= 4 {
-                // Main rotor should be third child 
-                let main_rotor_ptr = helicopter_root.children[2];
-                let main_rotor = &mut *main_rotor_ptr;
-                main_rotor.rotation.y = main_rotor_rotation;
-                
-                // Tail rotor should be fourth child
-                let tail_rotor_ptr = helicopter_root.children[3];
-                let tail_rotor = &mut *tail_rotor_ptr;
-                tail_rotor.rotation.x = tail_rotor_rotation;
+    pub fn update_animations(&mut self, elapsed: f32) {
+        let main_rotor_speed = 5_000.0;
+        let tail_rotor_speed = 5_000.0;
+
+        for (i, heli_node) in self.helicopters.iter_mut().enumerate() {
+            let heli = node_mut(heli_node);
+
+            // Offset each helicopter along the same path to avoid collisions
+            let offset = i as f32 * 0.75;
+            let heading = toolbox::simple_heading_animation(elapsed + offset);
+
+           // Update helicopter position to move forward
+            heli.position = glm::vec3(heading.x, 20.0, heading.z);
+            heli.rotation = glm::vec3(heading.pitch, heading.yaw, heading.roll);
+
+            // Children order: 0=body, 1=door, 2=main rotor, 3=tail rotor
+            if heli.n_children() >= 4 {
+                let main_rotor = heli.get_child(2);
+                main_rotor.rotation = glm::vec3(0.0, 1.0, 0.0) * main_rotor_speed * elapsed;
+
+                let tail_rotor = heli.get_child(3);
+                tail_rotor.rotation = glm::vec3(1.0, 0.0, 0.0) * tail_rotor_speed * elapsed;
             }
         }
+
     }
 
-    unsafe fn draw_scene(&self, node: &SceneNode, view_projection_matrix: &glm::Mat4, transformation_so_far: &glm::Mat4) {
-        // Step 1: Calculate individual transformation matrices for this node
-        let translation_matrix = glm::translation(&node.position);
-        let scale_matrix = glm::scaling(&node.scale);
-        
-        // Step 2: Handle rotation around reference point
-        // CORRECT ORDER: Move to reference point, rotate, then move back
-        let translate_to_reference = glm::translation(&(-node.reference_point));
-        let translate_from_reference = glm::translation(&node.reference_point);
-        
-        // Step 3: Calculate rotation matrices (Euler angles: Z * Y * X order)
-        let rotation_x = glm::rotation(node.rotation.x, &glm::vec3(1.0, 0.0, 0.0));
-        let rotation_y = glm::rotation(node.rotation.y, &glm::vec3(0.0, 1.0, 0.0));
-        let rotation_z = glm::rotation(node.rotation.z, &glm::vec3(0.0, 0.0, 1.0));
-        let combined_rotation = rotation_z * rotation_x * rotation_y;
-        
-        // Step 4: Combine this node's relative transformations  
-        // CORRECT ORDER: Translate_to_ref * Rotate * Translate_from_ref
-        let rotation_around_reference = translate_from_reference * combined_rotation * translate_to_reference;
-        let model_matrix = translation_matrix * rotation_around_reference * scale_matrix;
+    /// Recursive scene traversal + draw
+    unsafe fn draw_scene(
+        node: &SceneNode,
+        view_projection_matrix: &glm::Mat4,
+        parent: &glm::Mat4,
+        mvp_matrix_location: i32,
+        model_matrix_location: i32,
+    ) {
 
-        // Step 5: Combine with parent's accumulated model transformations
-        let current_model_matrix = transformation_so_far * model_matrix;
+        let x = glm::rotation(node.rotation.x, &glm::vec3(1.0, 0.0, 0.0));
+        let y = glm::rotation(node.rotation.y, &glm::vec3(0.0, 1.0, 0.0));
+        let z = glm::rotation(node.rotation.z, &glm::vec3(0.0, 0.0, 1.0));
+        let rot = z * x * y;
 
-        // Step 6: If this node has geometry to draw (index_count > 0)
-        if node.index_count > 0 {
+        let scl = glm::scaling(&node.scale);
+        let t_pos = glm::translation(&node.position);
+        let t_to_pivot = glm::translation(&node.reference_point);
+        let t_from_pivot = glm::translation(&(-node.reference_point));
+
+        let local = t_pos * t_to_pivot * rot * scl * t_from_pivot;
+
+
+        let world = parent * local;
+
+        // Draw if this node is drawable
+        if node.vao_id != 0 && node.index_count > 0 {
             gl::BindVertexArray(node.vao_id);
-            
-            // 
-            //multiplication order is ViewProjection * Model
-            let mvp_matrix = view_projection_matrix * current_model_matrix;
-            
-            // Pass both MVP matrix and Model matrix to the shader as separate uniforms
-            gl::UniformMatrix4fv(
-                self.mvp_matrix_location,
-                1,
-                gl::FALSE,
-                mvp_matrix.as_ptr(),
-            );
-            
-            gl::UniformMatrix4fv(
-                self.model_matrix_location,
-                1,
-                gl::FALSE,
-                current_model_matrix.as_ptr(),
-            );
 
-            // Draw the geometry
+            let mvp = view_projection_matrix * world;
+            gl::UniformMatrix4fv(mvp_matrix_location, 1, gl::FALSE, mvp.as_ptr());
+            gl::UniformMatrix4fv(model_matrix_location, 1, gl::FALSE, world.as_ptr());
+
             gl::DrawElements(
                 gl::TRIANGLES,
                 node.index_count,
@@ -239,10 +250,15 @@ impl Renderer {
             );
         }
 
-        // Step 8: Recursively traverse all children with accumulated model transformations
-        for &child_ptr in &node.children {
-            let child = &*child_ptr;
-            self.draw_scene(child, view_projection_matrix, &current_model_matrix);
+        // Recurse
+        for &child in &node.children {
+            Self::draw_scene(
+                unsafe { &*child },
+                view_projection_matrix,
+                &world,
+                mvp_matrix_location,
+                model_matrix_location,
+            );
         }
     }
 }
