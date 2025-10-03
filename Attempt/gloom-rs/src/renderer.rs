@@ -106,7 +106,7 @@ impl Renderer {
         }
     }
 
-    pub unsafe fn render(&self, camera: &Camera) {
+    pub unsafe fn render(&self, camera: &Camera, elapsed_time: f32) {
         // Clear the color and depth buffers
         gl::ClearColor(0.035, 0.046, 0.078, 1.0); 
         gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -116,6 +116,9 @@ impl Renderer {
         gl::Disable(gl::CULL_FACE);
         gl::DepthMask(gl::TRUE);
         gl::Uniform1f(self.alpha_location, 0.9);
+
+        // Update rotor animations based on elapsed time
+        self.update_animations(elapsed_time);
 
         // Get the View-Projection matrix from camera
         let view_projection_matrix = camera.get_view_projection_matrix();
@@ -127,24 +130,54 @@ impl Renderer {
         self.draw_scene(&*self.root_node, &view_projection_matrix, &identity_model);
     }
 
+    unsafe fn update_animations(&self, elapsed_time: f32) {
+        // Animation speeds 
+        let rotor_speed = 8.0;
+  
+        
+        // Calculate current rotation based on elapsed time
+        let main_rotor_rotation = elapsed_time * rotor_speed;
+        let tail_rotor_rotation = elapsed_time * rotor_speed;
+
+        // Access the root node and navigate to helicopter parts using unsafe pointers
+        let root = &*self.root_node;
+        if root.children.len() >= 2 {
+            // Get helicopter root node (should be second child after terrain)
+            let helicopter_root_ptr = root.children[1];
+            let helicopter_root = &mut *helicopter_root_ptr;
+            
+            if helicopter_root.children.len() >= 4 {
+                // Main rotor should be third child 
+                let main_rotor_ptr = helicopter_root.children[2];
+                let main_rotor = &mut *main_rotor_ptr;
+                main_rotor.rotation.y = main_rotor_rotation;
+                
+                // Tail rotor should be fourth child
+                let tail_rotor_ptr = helicopter_root.children[3];
+                let tail_rotor = &mut *tail_rotor_ptr;
+                tail_rotor.rotation.x = tail_rotor_rotation;
+            }
+        }
+    }
+
     unsafe fn draw_scene(&self, node: &SceneNode, view_projection_matrix: &glm::Mat4, transformation_so_far: &glm::Mat4) {
         // Step 1: Calculate individual transformation matrices for this node
         let translation_matrix = glm::translation(&node.position);
         let scale_matrix = glm::scaling(&node.scale);
         
         // Step 2: Handle rotation around reference point
-        // Move to reference point, rotate, then move back
-        let translate_to_reference = glm::translation(&node.reference_point);
-        let translate_from_reference = glm::translation(&(-node.reference_point));
+        // CORRECT ORDER: Move to reference point, rotate, then move back
+        let translate_to_reference = glm::translation(&(-node.reference_point));
+        let translate_from_reference = glm::translation(&node.reference_point);
         
-        // Step 3: Calculate rotation matrices 
+        // Step 3: Calculate rotation matrices (Euler angles: Z * Y * X order)
         let rotation_x = glm::rotation(node.rotation.x, &glm::vec3(1.0, 0.0, 0.0));
         let rotation_y = glm::rotation(node.rotation.y, &glm::vec3(0.0, 1.0, 0.0));
         let rotation_z = glm::rotation(node.rotation.z, &glm::vec3(0.0, 0.0, 1.0));
         let combined_rotation = rotation_z * rotation_x * rotation_y;
         
-        // Step 4: Combine this node's relative transformations
-        // Order: Scale * (Translate_from_ref * Rotate * Translate_to_ref) * Translation
+        // Step 4: Combine this node's relative transformations  
+        // CORRECT ORDER: Translate_to_ref * Rotate * Translate_from_ref
         let rotation_around_reference = translate_from_reference * combined_rotation * translate_to_reference;
         let model_matrix = translation_matrix * rotation_around_reference * scale_matrix;
 

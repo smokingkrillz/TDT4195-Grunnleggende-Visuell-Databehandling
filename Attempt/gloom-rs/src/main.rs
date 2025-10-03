@@ -109,7 +109,7 @@ fn main() {
         loop {
             // Compute time passed since the previous frame and since the start of the program
             let now = std::time::Instant::now();
-            let _elapsed = now.duration_since(first_frame_time).as_secs_f32();
+            let elapsed = now.duration_since(first_frame_time).as_secs_f32();
             let delta_time = now.duration_since(previous_frame_time).as_secs_f32();
             previous_frame_time = now;
 
@@ -141,9 +141,9 @@ fn main() {
                 *delta = (0.0, 0.0); // reset when done
             }
 
-            // Render the scene
+            // Render the scene with animation time
             unsafe {
-                renderer.render(&camera);
+                renderer.render(&camera, elapsed);
             }
 
             // Display the new color buffer on the display
