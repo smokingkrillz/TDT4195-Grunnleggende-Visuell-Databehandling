@@ -45,17 +45,19 @@ impl Renderer {
 
         // 4) Create individual helicopter part nodes with proper reference points
         let mut helicopter_body_node = SceneNode::from_vao(helicopter_body_vao, helicopter.body.index_count);
-        helicopter_body_node.reference_point = glm::vec3(0.0, 0.0, 0.0); // Body rotates around its center
         
         let mut helicopter_door_node = SceneNode::from_vao(helicopter_door_vao, helicopter.door.index_count);
-        helicopter_door_node.reference_point = glm::vec3(0.0, 0.0, 0.0); // Door rotates around its hinge
+      
         
         let mut helicopter_main_rotor_node = SceneNode::from_vao(helicopter_main_rotor_vao, helicopter.main_rotor.index_count);
-        helicopter_main_rotor_node.reference_point = glm::vec3(0.0, 0.0, 0.0); // Main rotor rotates around its center
         
         let mut helicopter_tail_rotor_node = SceneNode::from_vao(helicopter_tail_rotor_vao, helicopter.tail_rotor.index_count);
-        helicopter_tail_rotor_node.reference_point = glm::vec3(0.35, 2.3, 10.4); // Tail rotor reference point as specified
+        helicopter_tail_rotor_node.reference_point = glm::vec3(0.35, 2.3, 10.4); // Tail rotor reference point given
 
+
+        //testing 
+        // helicopter_body_node.rotation.y = std::f32::consts::PI / 6.0; // 30 degrees around Y-axis
+        // helicopter_body_node.position.x = 2.0; 
         // 5) Build the hierarchy: attach helicopter parts to helicopter root
         helicopter_root_node.add_child(&helicopter_body_node);
         helicopter_root_node.add_child(&helicopter_door_node);
@@ -115,42 +117,54 @@ impl Renderer {
         gl::DepthMask(gl::TRUE);
         gl::Uniform1f(self.alpha_location, 0.9);
 
-        // Get the base transformation matrix from camera
+        // Get the View-Projection matrix from camera
         let view_projection_matrix = camera.get_view_projection_matrix();
         
+        // Start with identity matrix for model transformations
+        let identity_model = glm::Mat4::identity();
+        
         // Traverse and draw the scene graph starting from root
-        self.draw_scene(&*self.root_node, &view_projection_matrix);
+        self.draw_scene(&*self.root_node, &view_projection_matrix, &identity_model);
     }
 
-    unsafe fn draw_scene(&self, node: &SceneNode, parent_transform: &glm::Mat4) {
-        // Calculate this node's transformation matrix
-        let translation = glm::translation(&node.position);
-        let scale = glm::scaling(&node.scale);
+    unsafe fn draw_scene(&self, node: &SceneNode, view_projection_matrix: &glm::Mat4, transformation_so_far: &glm::Mat4) {
+        // Step 1: Calculate individual transformation matrices for this node
+        let translation_matrix = glm::translation(&node.position);
+        let scale_matrix = glm::scaling(&node.scale);
         
-        // Reference point transformations for rotation
-        let to_reference = glm::translation(&node.reference_point);
-        let from_reference = glm::translation(&(-node.reference_point));
+        // Step 2: Handle rotation around reference point
+        // Move to reference point, rotate, then move back
+        let translate_to_reference = glm::translation(&node.reference_point);
+        let translate_from_reference = glm::translation(&(-node.reference_point));
         
-        // Rotation matrices
+        // Step 3: Calculate rotation matrices 
         let rotation_x = glm::rotation(node.rotation.x, &glm::vec3(1.0, 0.0, 0.0));
         let rotation_y = glm::rotation(node.rotation.y, &glm::vec3(0.0, 1.0, 0.0));
         let rotation_z = glm::rotation(node.rotation.z, &glm::vec3(0.0, 0.0, 1.0));
-        let rotation = rotation_z * rotation_y * rotation_x;
-     
-        // Combine transformations: Translation * (Translate_to_ref * Rotate * Translate_from_ref) * Scale
-        let node_transform = translation * to_reference * rotation * from_reference * scale;
-        let final_transform = parent_transform * node_transform;
+        let combined_rotation = rotation_z * rotation_x * rotation_y;
+        
+        // Step 4: Combine this node's relative transformations
+        // Order: Scale * (Translate_from_ref * Rotate * Translate_to_ref) * Translation
+        let rotation_around_reference = translate_from_reference * combined_rotation * translate_to_reference;
+        let model_matrix = translation_matrix * rotation_around_reference * scale_matrix;
 
-        // If this node has geometry to draw (index_count > 0)
+        // Step 5: Combine with parent's accumulated model transformations
+        let current_model_matrix = transformation_so_far * model_matrix;
+
+        // Step 6: If this node has geometry to draw (index_count > 0)
         if node.index_count > 0 {
             gl::BindVertexArray(node.vao_id);
             
-            //  transformation matrix
+            // 
+            //multiplication order is ViewProjection * Model
+            let mvp_matrix = view_projection_matrix * current_model_matrix;
+            
+            // Apply the final MVP matrix to the vertex shader
             gl::UniformMatrix4fv(
                 self.transform_matrix_location,
                 1,
                 gl::FALSE,
-                final_transform.as_ptr(),
+                mvp_matrix.as_ptr(),
             );
 
             // Draw the geometry
@@ -162,10 +176,10 @@ impl Renderer {
             );
         }
 
-        // Recursively draw all children
+        // Step 8: Recursively traverse all children with accumulated model transformations
         for &child_ptr in &node.children {
             let child = &*child_ptr;
-            self.draw_scene(child, &final_transform);
+            self.draw_scene(child, view_projection_matrix, &current_model_matrix);
         }
     }
 }
