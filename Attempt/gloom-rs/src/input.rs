@@ -24,42 +24,40 @@ impl InputHandler {
     pub fn handle_keyboard_input(&mut self, keys: &[VirtualKeyCode], camera: &mut Camera, delta_time: f32) {
         // Movement speeds (units per second)
         // These values can be adjusted to make camera movement faster or slower
-        let move_speed = 5.0;        // Translation speed (world units per second)
-        let rotation_speed = 2.0;    // Rotation speed (radians per second)
+        let move_speed = 50.0;        // Translation speed (world units per second)
+        let rotation_speed = 3.0;    // Rotation speed (radians per second)
 
         // Process each currently pressed key
         for key in keys.iter() {
             match key {
-                // === TRANSLATION CONTROLS ===
-                // These move the camera's position in 3D space
-                
-                // Forward/Backward movement (Z-axis in camera space)
+            
+                // Forward/Backward movement (Z-axis)
                 VirtualKeyCode::W => {
-                    // Move forward (negative Z in OpenGL right-handed coordinate system)
+                    //  forward (negative Z)
                     camera.translate(0.0, 0.0, -move_speed * delta_time);
                 }
                 VirtualKeyCode::S => {
-                    // Move backward (positive Z)
+                    //  backward (positive Z)
                     camera.translate(0.0, 0.0, move_speed * delta_time);
                 }
                 
-                // Left/Right strafing (X-axis in camera space)
+                // Left/Right strafing (X-axis)
                 VirtualKeyCode::A => {
-                    // Strafe left (negative X)
+                    //  left (negative X)
                     camera.translate(-move_speed * delta_time, 0.0, 0.0);
                 }
                 VirtualKeyCode::D => {
-                    // Strafe right (positive X)
+                    //  right (positive X)
                     camera.translate(move_speed * delta_time, 0.0, 0.0);
                 }
                 
-                // Up/Down movement (Y-axis in world space)
+                
                 VirtualKeyCode::Space => {
                     // Move up (positive Y in world coordinates)
                     camera.translate(0.0, move_speed * delta_time, 0.0);
                 }
                 VirtualKeyCode::LShift => {
-                    // Move down (negative Y in world coordinates)
+                   
                     camera.translate(0.0, -move_speed * delta_time, 0.0);
                 }
                 
@@ -95,15 +93,6 @@ impl InputHandler {
                     camera.rotate(0.0, 0.0, rotation_speed * delta_time);
                 }
                 
-                // These can be removed in the final version
-                VirtualKeyCode::Key1 => {
-                    // Increment test value
-                    self.arbitrary_number += delta_time;
-                }
-                VirtualKeyCode::Key2 => {
-                    // Decrement test value
-                    self.arbitrary_number -= delta_time;
-                }
                 
                 // Default case: ignore unhandled keys
                 _ => {}
